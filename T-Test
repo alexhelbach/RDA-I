@@ -1,0 +1,116 @@
+#NAme: Alexander Helbach 
+#Date: 11/13/20
+#Class: RDA 1 
+#Task: Conduct t-tests
+###############################################################################
+remove(list = ls())
+# Installing packages
+install.packages("tidyverse")
+install.packages("rstatix")
+install.packages("ggpubr")
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+
+# Importing dataset
+library(haven)
+BMI_by_Gender <- read_sav("C:/Users/helba/Downloads/BMI_by_Gender.sav")
+df <- BMI_by_Gender # I am lazy. 
+# What do we have? 
+anyNA(df) # Nice no NAs.  
+tibble(df) # 100 x 3 
+colnames(df) # "Gender"   "BMI_pre"  "BMI_post"
+
+### Descriptives and data wrangling ###
+# Recoding gender. 
+df$Gender <- as.factor(df$Gender) # Map values requires variable to be a factor.
+df$Gender <- plyr::mapvalues(df$Gender, from = c(0, 1), 
+                             to = c("Male", "Female")) # Numeric to character. 
+#Basic descriptives of df.
+table <- df %>% 
+  group_by(Gender) %>% 
+  get_summary_stats(BMI_pre, type = "mean_sd")
+
+### Assumptions for BMI_pre ###
+#Normality assumptions residuals. 
+model <- lm(BMI_pre~Gender, data = df)
+#Visualize
+ggqqplot(residuals(model)) # Grouped tight. 
+shapiro_test(residuals(model)) # p > .05. 
+#Normality of groups 
+df %>% 
+  group_by(Gender) %>% 
+  shapiro_test(BMI_pre) # p > .05 for both. 
+#Visualize 
+ggqqplot(df, "BMI_pre", facet.by = "Gender") # Both grouped tight. 
+#Homogneity of variance assumption
+plot(model, 1) #why 1? 
+#Levenes test 
+levene_test(df, BMI_pre~Gender) # p > .05. 
+#All assumptions are satisfied, parametric testing is used. 
+bxp <- ggboxplot(df,"Gender", "BMI_pre", color = "Gender",
+                 title = "BMI Pre Scores by Gender")
+t_test1 <- t.test(BMI_pre~Gender, data = df)
+t_test1
+cohens_d(df, BMI_pre~Gender)
+###Assumtions for BMI_post###
+#Normality assumptions residuals. 
+model <- lm(BMI_post~Gender, data = df)
+#Visualize
+ggqqplot(residuals(model)) # More dispersed than pre. 
+shapiro_test(residuals(model)) # p > .05. 
+#Normality of groups 
+df %>% 
+  group_by(Gender) %>% 
+  shapiro_test(BMI_post) # p > .05 for both. 
+#Visualize 
+ggqqplot(df, "BMI_post", facet.by = "Gender") # Both grouped tight. 
+#Homogeneity of variance assumption
+plot(model, 1) #why 1? 
+#Levene's test 
+levene_test(df, BMI_post~Gender) # p > .05. 
+#All assumptions are satisfied, parametric testing is used.
+bxp <- ggboxplot(df,"Gender", "BMI_post", color = "Gender",
+                 title = "BMI Post Scores by Gender")
+t_test2 <- t.test(BMI_post~Gender, data = df)
+t_test2
+
+### Assumptions of dependent t test ###
+# Combining pre/post weights into column with "group" label for t test. 
+dp_df <- df %>%
+  gather(key = "group", value = "BMI", BMI_pre, BMI_post)
+# Any outliers? 
+dp_df %>% 
+  group_by(Gender) %>% 
+  identify_outliers(BMI) # Cool no outliers 
+# Modeling variance 
+model <- lm(BMI~Gender, data =dp_df)
+#Visualize
+ggqqplot(residuals(model)) # More dispersed than pre. 
+shapiro_test(residuals(model)) # p < .05. 
+#Normality of groups 
+dp_df %>% 
+  group_by(Gender) %>% 
+  shapiro_test(BMI) # p > .05 for both. 
+#Visualize 
+ggqqplot(df, "BMI_post", facet.by = "Gender") # Both grouped tight. 
+#Homogneity of variance assumption
+plot(model, 1) #why 1? 
+#Levenes test 
+dp_df %>% levene_test(BMI~Gender) # p < .05. 
+#All assumptions are satisfied, parametric testing is used.
+
+### DEPENDENT T TEST ###
+# Summary of pre and post BMI. 
+summary_dt <- dp_df %>%
+  group_by(group) %>%
+  get_summary_stats(BMI, type = "mean_sd")
+print(summary_dt)
+
+ttest3 <- t.test(BMI ~ group, data = dp_df, )
+cohens_d(dp_df, BMI~group)
+bxp <- ggboxplot(dp_df, "group", "BMI", color = "group",
+                 title = "Boxplot of BMI Pre and Post")
+bxp
+get_summary_stats(df, "BMI_pre",type = "mean_sd")
+get_summary_stats(df, "BMI_post",type = "mean_sd")
