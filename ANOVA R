@@ -1,0 +1,124 @@
+#Name: Alexander Helabch 
+#Date: 11/18/20
+#Class: RDA 1 
+#Task: One Way and Repeated Anova
+###############################################################################
+# House keeping 
+rm(list = ls())
+################################
+### Data and packages upload ###
+################################
+#Installing packages 
+install.packages("tidyverse")
+install.packages("ggpubr")
+install.packages("rstatix")
+install.packages("sjstats")
+
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+library(sjstats)
+
+### Importing data set ###
+anxiety <- read.csv("C:/Users/helba/Desktop/anxiety.csv")
+# Rename 
+df <- anxiety
+# Quick look
+head(df)
+anyNA(df) # Cool no NA
+summary(df) # 3 groups, 3 time points
+
+### Recoding groups and changing variable type of t3 ###
+oldvalues <- c("1", "2", "3")
+newvalues <- factor(c("Basal", "Moderate", "High"))
+df1 <- df
+df1$group <- newvalues[match(df$group, oldvalues)] 
+df1$t3 <- as.numeric(df1$t3)
+
+### Boxplot of Anxiety at Time 3 ###
+# Ordering by membership. 
+df1$group <- factor(df1$group, levels=c("Basal", "Moderate", "High"))
+bxp <- ggboxplot(df1, x = "group", y = "t3", add = "point", color = "group",
+                 title = "Anxiety Levels by Membership at Time Three",
+                 xlab = "Membership",
+                 ylab = "Anxiety Level")
+print(bxp)
+### Assumptions ###
+levene_test(df1, t3 ~ group) # Met
+shapiro_test(df1, t3)         # Met 
+# Visualizing variance 
+ggqqplot(df1, "t3", facet.by = "group", color = "group") #looks good
+
+### One way ANOVA ###
+OneWay_Results <- aov(t3~group, data = df1)
+summary.aov(OneWay_Results)
+
+### Post Hoc ###
+ pwt <-  pairwise_t_test(df1, t3~group, paired = FALSE, 
+                  p.adjust.method = "bonferroni") 
+pht <- TukeyHSD(OneWay_Results) # Noice moderate to high and basal to high are sig. 
+table1 <- df1 %>% 
+  group_by(group) %>% 
+get_summary_stats(t3,type = "mean_sd")
+###############################################################################
+
+### Repeated Measures ANOVA ###
+### Wrangling data for ANOVA ###
+df4 <- anxiety
+df2 <- data.frame(df4[1:2], stack(df4[3:5]))
+# Rename and recode
+colnames(df2) <- c("id","group", "score", "time")
+df2$group <- as.factor(df2$group)
+df2$time <- as.factor(df2$time)
+df2$group <- newvalues[match(df$group, oldvalues)] 
+
+### Assumptions ### 
+levene_test(df2, score ~ group) # Met
+shapiro_test(df2, score)        # Met 
+# Visualizing variance 
+ggqqplot(df2, "score", ggtheme = theme_bw()) +
+  facet_grid(time ~ group)
+
+### Repeated ANOVA ### 
+#RA <- anova_test(data = df2, dv = score, wid = id,
+                 between = group, within = time)
+#get_anova_table(RA) # Significant 
+#z <- aov(score~time*group, data = df2)
+#summary.aov(z)
+#TukeyHSD(z)
+#anova_stats(z) # Which one? 
+
+### Post Hoc ###
+# At each time point
+oneway <- df2 %>% 
+  group_by(time) %>% 
+  anova_test(dv = score, wid = id, between = group) %>% 
+  get_anova_table()  %>% 
+  adjust_pvalue(method = "bonferroni")
+oneway # time 1 and 2 are significant.
+
+# Between groups
+pwc2 <- df2 %>% 
+  group_by(time) %>% 
+  pairwise_t_test(score ~ group, paired = FALSE, p.adjust.method = "bonferroni")
+pwc2 # a.) t2, basal-high. b.) t2, high-moderate, 
+# c.) t3, basal - high d.)t3, high-moderate. 
+
+# At each level of group
+one.way2 <- df2 %>%
+  group_by(group) %>%
+  anova_test(dv = score, wid = id, within = time) %>%
+  get_anova_table() %>%
+  adjust_pvalue(method = "bonferroni")
+one.way2
+
+# Between time point at each group
+pwc3 <- df2 %>%
+  group_by(group) %>%
+  pairwise_t_test(
+    score ~ time, paired = FALSE, 
+    p.adjust.method = "bonferroni") 
+pwc3
+########################
+#### Write Me Up :) ####
+########################
